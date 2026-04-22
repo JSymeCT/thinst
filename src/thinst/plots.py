@@ -156,6 +156,7 @@ def plot_tm_thinned(
     ax.tick_params(axis='y', which='both', left=False, labelleft=False)
     fig.tight_layout()
 
+
 def plot_cylinder(
         ax,
         x: int | float,
@@ -267,4 +268,3 @@ def plot_sptm_thinned(
     ax.yaxis.pane.fill = False
     ax.zaxis.pane.fill = False
     ax.set_aspect('equalxy', adjustable='box')
-

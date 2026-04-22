@@ -20,7 +20,8 @@ def thinst(
         tm_threshold: int | float = None,
         tm_unit: str = 'day',
         ids: pd.Series | list[str | int | float] = None,
-        no_reps: int = 100) \
+        no_reps: int = 100,
+        block: str = None) \
         -> pd.DataFrame | tuple[list | list | list]:
     """Thin points spatially, temporally, or spatiotemporally.
 
@@ -53,43 +54,47 @@ def thinst(
 
     __________
     Parameters:
-    df: pandas.DataFrame | geopandas.GeoDataFrame, optional, default None
-      Optionally, a dataframe containing the points to be thinned. If specified, the column(s) containing the
-      coordinates and/or datetimes must be specified with the parameters 'coords' and 'datetimes', respectively.
+    df : pandas.DataFrame | geopandas.GeoDataFrame, optional, default None
+        A dataframe containing the points to be thinned. If specified, the column(s) containing the coordinates and/or
+         datetimes must be specified with the parameters 'coords' and 'datetimes', respectively.
     coords : str | pandas.Series | list[tuple[int, int], Point], optional, default None
-      One of the following:
-        the name of the column in 'df' that contains the coordinates
-        a pandas.Series of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
-        a list of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
+        One of the following:
+            the name of the column in 'df' that contains the coordinates
+            a pandas.Series of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
+            a list of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
     sp_threshold : int | float, optional, default None
-      The spatial threshold to use for spatial and spatiotemporal thinning in the units of the coordinates. If both a
-       spatial and temporal threshold are specified, spatiotemporal thinning will occur. If only a spatial threshold is
-       specified, spatial thinning will occur. If only a temporal threshold is specified, temporal thinning will occur.
+        The spatial threshold to use for spatial and spatiotemporal thinning in the units of the coordinates. If both a
+         spatial and temporal threshold are specified, spatiotemporal thinning will occur. If only a spatial threshold
+         is specified, spatial thinning will occur. If only a temporal threshold is specified, temporal thinning will
+         occur.
     datetimes : str | pandas.Series | list[str | pandas.Timestamp | datetime], optional, default None
-      One of the following:
-        the name of the column in 'df' that contains the datetimes
-        a pandas.Series of datetimes as strings, pandas.Timestamps, or datetime.datetimes
-        a list of datetimes as strings, pandas.Timestamps, or datetime.datetimes
+        One of the following:
+            the name of the column in 'df' that contains the datetimes
+            a pandas.Series of datetimes as strings, pandas.Timestamps, or datetime.datetimes
+            a list of datetimes as strings, pandas.Timestamps, or datetime.datetimes
     tm_threshold : int | float, optional, default None
-      The temporal threshold to use for temporal and spatiotemporal thinning in the units set with 'tm_unit'. If both a
-       spatial and temporal threshold are specified, spatiotemporal thinning will occur. If only a spatial threshold is
-       specified, spatial thinning will occur. If only a temporal threshold is specified, temporal thinning will occur.
-       datetimes : str | pandas.Series | list[str | pandas.Timestamp | datetime], optional, default None
-    tm_unit: {'year', 'month', 'day', 'hour', 'moy', 'doy'}, optional, default 'day'
-      The temporal units to use for temporal or spatiotemporal thinning. Must be one of the following:
-        'year': year (all datetimes from the same year will be given the same value)
-        'month': month (all datetimes from the same month and year will be given the same value)
-        'day': day (all datetimes with the same date will be given the same value)
-        'hour': hour (all datetimes in the same hour on the same date will be given the same value)
-        'moy': month of the year (i.e., January is 1, February is 2, regardless of the year)
-        'doy': day of the year (i.e., January 1st is 1, February 1st is 32, regardless of the year)
-      The default value is 'day'.
+        The temporal threshold to use for temporal and spatiotemporal thinning in the units set with 'tm_unit'. If both
+         a spatial and temporal threshold are specified, spatiotemporal thinning will occur. If only a spatial threshold
+         is specified, spatial thinning will occur. If only a temporal threshold is specified, temporal thinning will
+         occur.
+    tm_unit : {'year', 'month', 'day', 'hour', 'moy', 'doy'}, optional, default 'day'
+        The temporal units to use for temporal or spatiotemporal thinning. Must be one of the following:
+            'year': year (all datetimes from the same year will be given the same value)
+            'month': month (all datetimes from the same month and year will be given the same value)
+            'day': day (all datetimes with the same date will be given the same value)
+            'hour': hour (all datetimes in the same hour on the same date will be given the same value)
+            'moy': month of the year (i.e., January is 1, February is 2, regardless of the year)
+            'doy': day of the year (i.e., January 1st is 1, February 1st is 32, regardless of the year)
+        The default value is 'day'.
     ids : pandas.Series | list[str | int | float], optional, default None
-      If using the second option for data input, a pandas.Series or list of unique IDs to identify the points that were
-       kept after thinning.
+        If using the second option for data input, a pandas.Series or list of unique IDs to identify the points that
+         were kept after thinning.
     no_reps : int, optional, default 100
-      The number of repetitions to run when conducting thinning. From these repetitions, one of those that retains the
-       most points will be output.
+        The number of repetitions to run when conducting thinning. From these repetitions, one of those that retains the
+         most points will be output.
+    block : str, optional, default None
+        Optionally, the name of a column in df that contains unique values to be used to separate the data into blocks
+         that will be thinned independently. Note, only applicable if using the first input option.
 
     __________
     Returns:
@@ -103,57 +108,49 @@ def thinst(
            returned in its place (meaning that the tuple will always have three elements: coordinates, datetimes, IDs).
     """
 
-    #####
-    # Get the close pairs
-    if (isinstance(sp_threshold, int | float)  # spatiotemporal: if both a spatial...
-            and isinstance(tm_threshold, int | float)):  # ...and temporal threshold are specified...
-        coords = get_coords(df=df, coords=coords)  # get coords
-        datetimes = get_datetimes(df=df, datetimes=datetimes)  # get datetimes
-        pairs = get_sptm_pairs(  # get spatiotemporal pairs
+    if block is not None:
+        thinned_list = []  # list for thinned DataFrames
+        for uniq in df[block].unique():  # for each unique value in block col
+            df_block = df.copy()[df[block] == uniq]  # subset the DataFrame
+            pairs_block = get_pairs(
+                df=df_block,
+                coords=coords,
+                sp_threshold=sp_threshold,
+                datetimes=datetimes,
+                tm_threshold=tm_threshold,
+                tm_unit=tm_unit
+            )
+            thinned_list.append(thinner(
+                pairs=pairs_block,
+                df=df_block,
+                coords=coords,
+                datetimes=datetimes,
+                no_reps=no_reps
+            ))
+        thinned = pd.concat(thinned_list)
+
+    else:
+        pairs = get_pairs(
+            df=df,
             coords=coords,
             sp_threshold=sp_threshold,
             datetimes=datetimes,
             tm_threshold=tm_threshold,
-            tm_unit=tm_unit)
-    elif (isinstance(sp_threshold, int | float)  # spatial: if only a spatial threshold is specified...
-          and not isinstance(tm_threshold, int | float)):
-        coords = get_coords(df=df, coords=coords)  # get coords
-        pairs = get_sp_pairs(  # get spatial pairs
-            coords=coords,
-            sp_threshold=sp_threshold)
-    elif (isinstance(tm_threshold, int | float)  # temporal: if only a temporal threshold is specified...
-          and not isinstance(sp_threshold, int | float)):
-        datetimes = get_datetimes(df=df, datetimes=datetimes)  # get datetimes
-        pairs = get_tm_pairs(  # get temporal pairs
-            datetimes=datetimes,
-            tm_threshold=tm_threshold,
-            tm_unit=tm_unit)
-    else:  # invalid input
-        raise Exception("neither 'sp_threshold' nor 'tm_threshold' specified correctly.")
-
-    #####
-    # thin
-    if len(pairs) > 0:  # if there are close pairs (i.e., if thinning is required)...
-        selected = selector(  # ...select the indices to be removed and...
+            tm_unit=tm_unit
+        )
+        thinned = thinner(
             pairs=pairs,
-            no_reps=no_reps)
-        removed = remover(  # ...remove them
-            selected=selected,
             df=df,
             coords=coords,
             datetimes=datetimes,
-            ids=ids)
-        return removed
-    else:  # else if there are no close pairs (i.e., if thinning is not required), return what was input
-        if isinstance(df, pd.DataFrame):  # if a pandas.DataFrame or geopandas.GeoDataFrame input...
-            return df  # ...return it 
-        else:  # else...
-            return coords, datetimes, ids  # ...return the coords, datetimes, and IDs in a tuple 
+            ids=ids,
+            no_reps=no_reps
+        )
+    return thinned.reset_index(drop=True)
 
 
 #####
 # Functions
-
 def get_coords(df: pd.DataFrame = None, coords: str | pd.Series | list = None)\
         -> list[tuple[float | int, float | int] | Point]:
     """Get the coordinates.
@@ -306,7 +303,7 @@ def get_datetimes(df: pd.DataFrame = None, datetimes: str | pd.Series | list = N
                             f"\n  datetime.datetime")
     elif len(dtypes) > 1:  # if there is more than one datatype, raise error
         raise TypeError("the datetimes are of more than one datatype."
-                        f"\nThe datatypes are: {", ".join([dtype.__name__ for dtype in dtypes])}"
+                        f"\nThe datatypes are: {', '.join([dtype.__name__ for dtype in dtypes])}"
                         f"\nPlease ensure that all datetimes are of one of the following datatypes:"
                         f"\n  str"
                         f"\n  pandas.Timestamp"
@@ -339,21 +336,21 @@ def get_zs(datetimes: list[datetime | pd.Timestamp], tm_unit: str = 'day'):
       A list that contains the Z coordinates.
     """
 
-    # set minimum date (does not matter when as values can go negative without issue, but 1970-01-01 is conventional)
-    date_min = pd.to_datetime('1970-01-01')
+    # get minimum date
+    date_min = min(datetimes)
 
     if tm_unit in ['year']:  # if temporal unit is year
         zs = [date.year for date in datetimes]  # Zs are year (plain and simple)
     elif tm_unit in ['month']:  # if temporal unit is month
-        zs = [(date.year - 1970) * 12 + date.month for date in datetimes]  # Zs are number of months since 1970-01-01
+        zs = [(date.year - date_min.year) * 12 + date.month for date in datetimes]  # Zs are number of months since min date
     elif tm_unit in ['moy']:  # if temporal unit is month of year
         zs = [date.month for date in datetimes]  # Zs are month of the year (1-12)
     elif tm_unit in ['day']:  # if temporal unit is day
-        zs = [(date - date_min).days for date in datetimes]  # Zs are number of days since 1970-01-01
+        zs = [(date - date_min).days for date in datetimes]  # Zs are number of days since min date
     elif tm_unit in ['doy']:  # if temporal unit is day of year
         zs = [min(365, int(date.strftime('%j'))) for date in datetimes]  # Zs are day of the year (1-366)
     elif tm_unit in ['hour']:  # if temporal unit is hour
-        zs = [(date - date_min).days * 24 + (date - date_min).seconds / 3600 for date in datetimes]  # Zs are hours since 1970-01-01
+        zs = [(date - date_min).days * 24 + (date - date_min).seconds / 3600 for date in datetimes]  # Zs are hours since min date
     else:  # else unrecognised value for temporal unit
         raise ValueError(" temporal unit not recognised. Please ensure that value for 'tm_unit' is valid.")
 
@@ -458,6 +455,83 @@ def get_sptm_pairs(coords: list[Point], sp_threshold: int | float,
     return pairs_list  # list of pairs that are within the both the spatial and temporal thresholds of each other
 
 
+def get_pairs(
+        df: pd.DataFrame = None,
+        coords: str | pd.Series | list[tuple[int, int], Point] = None,
+        sp_threshold: int | float = None,
+        datetimes: str | pd.Series | list[str | pd.Timestamp | datetime] = None,
+        tm_threshold: int | float = None,
+        tm_unit: str = 'day') \
+        -> list[tuple[int, int]]:
+    """Get pairs of points that are within either the spatial threshold, the temporal threshold, or the spatial and
+     temporal thresholds.
+    __________
+    Parameters:
+        df : pandas.DataFrame | geopandas.GeoDataFrame, optional, default None
+            A dataframe containing the points to be thinned. If specified, the column(s) containing the coordinates
+             and/or datetimes must be specified with the parameters 'coords' and 'datetimes', respectively.
+        coords : str | pandas.Series | list[tuple[int, int], Point], optional, default None
+            One of the following:
+                the name of the column in 'df' that contains the coordinates
+                a pandas.Series of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
+                a list of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
+        sp_threshold : int | float, optional, default None
+            The spatial threshold to use for spatial and spatiotemporal thinning in the units of the coordinates. If both a
+            spatial and temporal threshold are specified, spatiotemporal thinning will occur. If only a spatial threshold is
+            specified, spatial thinning will occur. If only a temporal threshold is specified, temporal thinning will occur.
+        datetimes : str | pandas.Series | list[str | pandas.Timestamp | datetime], optional, default None
+            One of the following:
+                the name of the column in 'df' that contains the datetimes
+                a pandas.Series of datetimes as strings, pandas.Timestamps, or datetime.datetimes
+                a list of datetimes as strings, pandas.Timestamps, or datetime.datetimes
+        tm_threshold : int | float, optional, default None
+            The temporal threshold to use for temporal and spatiotemporal thinning in the units set with 'tm_unit'. If both a
+            spatial and temporal threshold are specified, spatiotemporal thinning will occur. If only a spatial threshold is
+            specified, spatial thinning will occur. If only a temporal threshold is specified, temporal thinning will occur.
+        tm_unit : {'year', 'month', 'day', 'hour', 'moy', 'doy'}, optional, default 'day'
+            The temporal units to use for temporal or spatiotemporal thinning. Must be one of the following:
+                'year': year (all datetimes from the same year will be given the same value)
+                'month': month (all datetimes from the same month and year will be given the same value)
+                'day': day (all datetimes with the same date will be given the same value)
+                'hour': hour (all datetimes in the same hour on the same date will be given the same value)
+                'moy': month of the year (i.e., January is 1, February is 2, regardless of the year)
+                'doy': day of the year (i.e., January 1st is 1, February 1st is 32, regardless of the year)
+            The default value is 'day'.
+    __________
+    Returns:
+      A list of tuples that each contain the indices of a pair of points that are within the spatial and/or temporal
+       threshold of each other.
+    """
+
+    # Get the close pairs
+    if (isinstance(sp_threshold, int | float)  # spatiotemporal: if both a spatial...
+            and isinstance(tm_threshold, int | float)):  # ...and temporal threshold are specified...
+        coords = get_coords(df=df, coords=coords)  # get coords
+        datetimes = get_datetimes(df=df, datetimes=datetimes)  # get datetimes
+        pairs = get_sptm_pairs(  # get spatiotemporal pairs
+            coords=coords,
+            sp_threshold=sp_threshold,
+            datetimes=datetimes,
+            tm_threshold=tm_threshold,
+            tm_unit=tm_unit)
+    elif (isinstance(sp_threshold, int | float)  # spatial: if only a spatial threshold is specified...
+          and not isinstance(tm_threshold, int | float)):
+        coords = get_coords(df=df, coords=coords)  # get coords
+        pairs = get_sp_pairs(  # get spatial pairs
+            coords=coords,
+            sp_threshold=sp_threshold)
+    elif (isinstance(tm_threshold, int | float)  # temporal: if only a temporal threshold is specified...
+          and not isinstance(sp_threshold, int | float)):
+        datetimes = get_datetimes(df=df, datetimes=datetimes)  # get datetimes
+        pairs = get_tm_pairs(  # get temporal pairs
+            datetimes=datetimes,
+            tm_threshold=tm_threshold,
+            tm_unit=tm_unit)
+    else:  # invalid input
+        raise Exception("neither 'sp_threshold' nor 'tm_threshold' specified correctly.")
+    return pairs
+
+
 def selector(pairs: list[tuple[int, int]], no_reps: int = 100) -> list[int]:
     """Select points to remove.
     From the list of pairs that are within the spatial and/or temporal threshold(s) of each other, select the points to
@@ -510,8 +584,8 @@ def remover(selected: list[int],
       selected: list[int]
         A list of the indices of the points selected to be removed by selector().
       df: pandas.DataFrame | geopandas.GeoDataFrame, optional, default None
-        Optionally, a dataframe containing the points to be thinned. If specified, the column(s) containing the
-        coordinates and/or datetimes must be specified with the parameters 'coords' and 'datetimes', respectively.
+        A dataframe containing the points to be thinned. If specified, the column(s) containing the coordinates
+         and/or datetimes must be specified with the parameters 'coords' and 'datetimes', respectively.
       coords : str | pandas.Series | list[tuple[int, int], Point], optional, default None
         One of the following:
           the name of the column in 'df' that contains the coordinates
@@ -538,8 +612,8 @@ def remover(selected: list[int],
     """
 
     if isinstance(df, pd.DataFrame):  # if a pandas.DataFrame or geopandas.GeoDataFrame is specified...
-        thinned_df = df.copy().reset_index(drop=True)  # copy it
-        thinned_df = thinned_df.loc[~df.index.isin(selected)]  # remove the indices selected to be removed
+        thinned_df = df.copy().reset_index(drop=True)  # copy it and reset index
+        thinned_df = thinned_df.loc[~thinned_df.index.isin(selected)]  # remove the indices selected to be removed
         return thinned_df  # return the thinned pandas.DataFrame / geopandas.GeoDataFrame
     else:  # if a pandas.DataFrame or geopandas.GeoDataFrame is not specified
         thinned_coords = [coords[i] for i in range(len(coords)) if i not in selected] \
@@ -549,3 +623,56 @@ def remover(selected: list[int],
         thinned_ids = [coords[i] for i in range(len(ids)) if i not in selected] \
             if (isinstance(ids, list)) else None  # get thinned ids (if ids provided) based on selected
         return thinned_coords, thinned_datetimes, thinned_ids  # return the thinned coords, datetimes, and IDs
+
+
+def thinner(
+        pairs: list[tuple[int, int]],
+        df: pd.DataFrame = None,
+        coords: str | pd.Series | list[tuple[int, int], Point] = None,
+        datetimes: str | pd.Series | list[str | pd.Timestamp | datetime] = None,
+        ids: pd.Series | list[str | int | float] = None,
+        no_reps: int = 100) \
+        -> pd.DataFrame | tuple[list | list | list]:
+    """Thin points.
+
+    pairs: list[tuple[int, int]]
+        The list of pairs that are within the spatial and/or temporal threshold(s) of each other as output by
+         get_pairs().
+    df : pandas.DataFrame | geopandas.GeoDataFrame, optional, default None
+        Optionally, a dataframe containing the points to be thinned. If specified, the column(s) containing the
+         coordinates and/or datetimes must be specified with the parameters 'coords' and 'datetimes', respectively.
+    coords : str | pandas.Series | list[tuple[int, int], Point], optional, default None
+        One of the following:
+            the name of the column in 'df' that contains the coordinates
+            a pandas.Series of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
+            a list of coordinates as tuples, e.g., (X, Y), or as shapely.Points, e.g., POINT (X, Y)
+    datetimes : str | pandas.Series | list[str | pandas.Timestamp | datetime], optional, default None
+        One of the following:
+            the name of the column in 'df' that contains the datetimes
+            a pandas.Series of datetimes as strings, pandas.Timestamps, or datetime.datetimes
+            a list of datetimes as strings, pandas.Timestamps, or datetime.datetimes
+    ids : pandas.Series | list[str | int | float], optional, default None
+        If using the second option for data input, a pandas.Series or list of unique IDs to identify the points that
+         were kept after thinning.
+    no_reps : int, optional, default 100
+        The number of repetitions to run when conducting thinning. From these repetitions, one of those that retains the
+         most points will be output.
+    """
+
+    # thin
+    if len(pairs) > 0:  # if there are close pairs (i.e., if thinning is required)...
+        selected = selector(  # ...select the indices to be removed and...
+            pairs=pairs,
+            no_reps=no_reps)
+        removed = remover(  # ...remove them
+            selected=selected,
+            df=df,
+            coords=coords,
+            datetimes=datetimes,
+            ids=ids)
+        return removed
+    else:  # else if there are no close pairs (i.e., if thinning is not required), return what was input
+        if isinstance(df, pd.DataFrame):  # if a pandas.DataFrame or geopandas.GeoDataFrame input...
+            return df  # ...return it
+        else:  # else...
+            return coords, datetimes, ids  # ...return the coords, datetimes, and IDs in a tuple
